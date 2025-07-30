@@ -2,7 +2,7 @@ import streamlit as st
 
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from Connection import get_collection, get_openai_connection
+from Connection import get_collection, get_openai_connection,get_genai_connection
 from Authentication import login_required
 
 def main():
@@ -44,7 +44,7 @@ def main():
         )
         with st.spinner("Processing your responses..."):
 
-            client = get_openai_connection()
+            client = get_genai_connection()
 
             prompt = ""
             for q, a in st.session_state.responses.items():
