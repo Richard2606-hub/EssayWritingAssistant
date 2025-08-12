@@ -8,12 +8,7 @@ from Authentication import login_required
 def get_genai_generative(system_prompt, prompt):
     model = genai.GenerativeModel("gemini-pro")
     response = model.generate_content([system_prompt, prompt])
-    
-    # Safely access the response text
-    if hasattr(response, "text"):
-        return response.text
-    else:
-        return "No response text available."
+    return response.text
 
 def main():
     st.title("Essay Writing Assistant")
