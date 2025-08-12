@@ -2,7 +2,7 @@ import streamlit as st
 
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from Connection import get_collection, get_openai_connection,get_genai_connection
+from Connection import get_collection, get_openai_connection
 from Authentication import login_required
 
 def main():
@@ -40,35 +40,15 @@ def main():
         system_prompt = (
             "You are a teacher who analyzes students' writing styles "
             "based on their responses to a series of questions. "
-            "You will provide a summary of their responses in not more than 100 words. "
+            "You will provide a summary of their responses in not more than 100 words."
         )
+
+        prompt = "\n".join([f"{q}: {a}" for q, a in st.session_state.responses.items()])
+
         with st.spinner("Processing your responses..."):
-
-            client = get_genai_connection()
-
-            prompt = ""
-            for q, a in st.session_state.responses.items():
-                prompt += (f"{q}: {a}")
-
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=100
-            )
-
-            summary = response.choices[0].text
+            summary = get_genai_generative(system_prompt, prompt)
 
         st.write("Thank you for providing your information. Here's a summary of your responses:")
-        
         st.markdown(summary)
 
         if st.button("Start Over"):
