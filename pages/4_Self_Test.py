@@ -5,6 +5,16 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_collection, get_openai_connection
 from Authentication import login_required
 
+def get_genai_generative(system_prompt, prompt):
+    model = genai.GenerativeModel("gemini-pro")
+    response = model.generate_content([system_prompt, prompt])
+    
+    # Safely access the response text
+    if hasattr(response, "text"):
+        return response.text
+    else:
+        return "No response text available."
+
 def main():
     st.title("Essay Writing Assistant")
     st.write("Please answer the following questions to help us understand you better and provide tailored essay writing assistance.")
