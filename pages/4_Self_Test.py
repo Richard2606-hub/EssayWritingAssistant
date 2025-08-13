@@ -49,7 +49,7 @@ def main():
                 prompt += (f"{q}: {a}")
 
             response = get_genai_connection(
-                model="gpt-3.5-turbo",
+                model="gemini-1.5-flash",
                 messages=[
                     {
                         "role": "system",
