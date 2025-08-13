@@ -37,6 +37,7 @@ def main():
             st.session_state.current_question += 1
             st.rerun()
     else:
+        get_genai_connection()
         system_prompt = (
             "You are a teacher who analyzes students' writing styles "
             "based on their responses to a series of questions. "
