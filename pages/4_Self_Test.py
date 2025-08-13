@@ -1,4 +1,5 @@
 import streamlit as st
+from Connection import get_collection, get_openai_connection, get_genai_connection
 
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
