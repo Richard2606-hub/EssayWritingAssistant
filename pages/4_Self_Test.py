@@ -49,19 +49,13 @@ def main():
             for q, a in st.session_state.responses.items():
                 prompt += (f"{q}: {a}")
 
-            get_genai_connection()
-                model="gemini-1.5-flash",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-
+             model = genai.GenerativeModel(
+            "gemini-1.5-flash",
+            system_instruction = (
+                system_prompt
+            )
+        )
+            
         st.write("Thank you for providing your information. Here's a summary of your responses:")
         
         st.markdown(summary)
