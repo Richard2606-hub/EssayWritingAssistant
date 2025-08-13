@@ -37,28 +37,30 @@ def main():
             st.session_state.current_question += 1
             st.rerun()
     else:
-        get_genai_connection()
+       genai = get_genai_connection()
+
         system_prompt = (
             "You are a teacher who analyzes students' writing styles "
             "based on their responses to a series of questions. "
-            "You will provide a summary of their responses in not more than 100 words. "
+            "You will provide a summary of their responses in not more than 100 words."
         )
-        with st.spinner("Processing your responses..."):
-
-            prompt = ""
-            for q, a in st.session_state.responses.items():
-                prompt += (f"{q}: {a}")
-
-                 model = genai.GenerativeModel(
-                "gemini-1.5-flash",
-                system_instruction = (
-                    system_prompt
-                    )
-                )
-            
-        st.write("Thank you for providing your information. Here's a summary of your responses:")
         
+        prompt = ""
+        for q, a in st.session_state.responses.items():
+            prompt += f"{q}: {a}\n"
+        
+        model = genai.GenerativeModel(
+            "gemini-1.5-flash",
+            system_instruction=system_prompt
+        )
+        
+        with st.spinner("Processing your responses..."):
+            response = model.generate_content(prompt)
+            summary = response.text
+        
+        st.write("Thank you for providing your information. Here's a summary of your responses:")
         st.markdown(summary)
+
 
     if st.button("Start Over"):
         st.session_state.current_question = 0
