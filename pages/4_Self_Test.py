@@ -49,21 +49,21 @@ def main():
             for q, a in st.session_state.responses.items():
                 prompt += (f"{q}: {a}")
 
-             model = genai.GenerativeModel(
-            "gemini-1.5-flash",
-            system_instruction = (
-                system_prompt
+                 model = genai.GenerativeModel(
+                "gemini-1.5-flash",
+                system_instruction = (
+                    system_prompt
+                    )
                 )
-            )
             
         st.write("Thank you for providing your information. Here's a summary of your responses:")
         
         st.markdown(summary)
 
-        if st.button("Start Over"):
-            st.session_state.current_question = 0
-            st.session_state.responses = {}
-            st.rerun()
+    if st.button("Start Over"):
+        st.session_state.current_question = 0
+        st.session_state.responses = {}
+        st.rerun()
 
 if __name__ == "__main__":
     main()
