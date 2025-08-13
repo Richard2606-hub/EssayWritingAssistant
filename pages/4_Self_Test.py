@@ -53,8 +53,8 @@ def main():
             "gemini-1.5-flash",
             system_instruction = (
                 system_prompt
+                )
             )
-        )
             
         st.write("Thank you for providing your information. Here's a summary of your responses:")
         
