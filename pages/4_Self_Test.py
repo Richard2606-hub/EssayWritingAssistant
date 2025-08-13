@@ -44,13 +44,11 @@ def main():
         )
         with st.spinner("Processing your responses..."):
 
-            client = get_genai_connection()
-
             prompt = ""
             for q, a in st.session_state.responses.items():
                 prompt += (f"{q}: {a}")
 
-            response = client.chat.completions.create(
+            response = get_genai_generation(
                 model="gpt-3.5-turbo",
                 messages=[
                     {
