@@ -48,7 +48,7 @@ def main():
             for q, a in st.session_state.responses.items():
                 prompt += (f"{q}: {a}")
 
-            response = get_genai_connectionn(
+            response = get_genai_connection(
                 model="gpt-3.5-turbo",
                 messages=[
                     {
