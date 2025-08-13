@@ -26,7 +26,11 @@ def get_openai_connection():
     return client
 
 def get_genai_connection():
+    if not GEMINIKEY:
+        raise ValueError("Google API key is missing.")
     genai.configure(api_key = GEMINIKEY)
+    return genai
+
 
 # # Function to analyze essay and return results (placeholder)
 # def analyze_essay(essay_text):
