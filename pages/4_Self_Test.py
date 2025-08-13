@@ -48,7 +48,7 @@ def main():
             for q, a in st.session_state.responses.items():
                 prompt += (f"{q}: {a}")
 
-            response = get_genai_connection(
+            get_genai_connection()
                 model="gemini-1.5-flash",
                 messages=[
                     {
@@ -59,11 +59,7 @@ def main():
                         "role": "user",
                         "content": prompt
                     }
-                ],
-                max_tokens=100
-            )
-
-            summary = response.choices[0].text
+                ]
 
         st.write("Thank you for providing your information. Here's a summary of your responses:")
         
