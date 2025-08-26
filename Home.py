@@ -21,4 +21,4 @@ with col2:
         st.switch_page("pages/3_Essay_Writing_Chat.py")
 
     if st.button("Self Analysis", use_container_width=True):
-        st.switch_page("pages/4_Self_Analysis.py")
+        st.switch_page("pages/4_Self_Test.py")
