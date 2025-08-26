@@ -6,89 +6,73 @@ import google.generativeai as genai
 st.set_page_config(page_title="Essay Writing Chat", page_icon="💬")
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from Connection import get_openai_connection, get_genai_connection
+from Connection import get_genai_connection
 
-st.write("# Essay Writing Chat 💬")
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>💬 Essay Writing Chat</h1>", unsafe_allow_html=True)
+st.write("Your personal essay coach! Ask me anything about essay writing ✍️")
 
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"
-
+# Initialize session state
 if "messages" not in st.session_state:
     system_prompt = (
-        "You are an essay teacher and will be answering "
-        "only question that related to essay writing. "
-        "You can write a sample essay based on a type or any topic "
-        "or based a given structure. "
-        "If a question is not related to essay writing, "
-        "do not answer it and provide your reasons."
+        "You are an essay teacher and will only answer questions related to essay writing. "
+        "You can explain essay structures, write short samples, or guide improvements. "
+        "If a question is not related to essay writing, politely refuse."
     )
     if "user_info" in st.session_state:
-        system_prompt += "\nFollowing is some info about your student:\n"
+        system_prompt += "\nStudent info:\n"
         system_prompt += "\n".join(
             f"- {k}: {v}" for k, v in st.session_state.user_info.items()
         )
+
     st.session_state.messages = [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "assistant",
-            "content": "Hello, I am your essay teacher, "
-            "how can I help you?",
-        }
+        {"role": "system", "content": system_prompt},
+        {"role": "assistant", "content": "👋 Hello! I’m your essay coach. What would you like help with today?"}
     ]
 
+# Display messages
 for message in st.session_state.messages[1:]:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    if message["role"] == "user":
+        with st.chat_message("user", avatar="🧑‍🎓"):
+            st.markdown(message["content"])
+    else:
+        with st.chat_message("assistant", avatar="📝"):
+            st.markdown(message["content"])
 
+# Gemini connection
 client = get_genai_connection()
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    system_instruction=st.session_state.messages[0]["content"]
+)
 
-if prompt := st.chat_input("What is up?"):
+# Chat input
+if prompt := st.chat_input("Type your essay question here..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
-        # stream = client.chat.completions.create(
-        #     model=st.session_state["openai_model"],
-        #     messages=[
-        #         {"role": m["role"], "content": m["content"]}
-        #         for m in st.session_state.messages
-        #     ],
-        #     stream=True,
-        # )
-        
-        # Gemini
-        get_genai_connection()
-        system_prompt = (
-            "You are an essay teacher and will be answering "
-            "only question that related to essay writing. "
-            "You can write a sample essay based on a type or any topic "
-            "or based a given structure. "
-            "If a question is not related to essay writing, "
-            "do not answer it and provide your reasons."
-        )
-        model = genai.GenerativeModel(
-            "gemini-1.5-flash",
-            system_instruction = (
-                system_prompt
-            )
-        )
+    with st.chat_message("assistant", avatar="📝"):
+        with st.spinner("Thinking..."):
+            response = model.generate_content(
+                [{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages]
+            ).text
+            st.markdown(response)
 
-        stream = model.generate_content(
-            [
-                f'role": {m["role"]}, "content": {m["content"]}'
-                for m in st.session_state.messages
-            ]
-        ).text
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
-        st.write(stream)
-        # response = st.write_stream(stream)
-    st.session_state.messages.append(
-        {"role": "assistant", "content": stream}
-    )
-    # st.session_state.messages.append(
-    #     {"role": "assistant", "content": response}
-    # )
+# Quick action buttons
+st.markdown("---")
+st.write("🎯 Quick Help:")
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("📖 Sample Essay"):
+        st.session_state.messages.append({"role": "user", "content": "Write me a short sample essay on 'Healthy Lifestyle'."})
+        st.experimental_rerun()
+with col2:
+    if st.button("📝 Improve My Introduction"):
+        st.session_state.messages.append({"role": "user", "content": "How can I write a better essay introduction?"})
+        st.experimental_rerun()
+with col3:
+    if st.button("🎯 Conclusion Tips"):
+        st.session_state.messages.append({"role": "user", "content": "Give me some tips on writing essay conclusions."})
+        st.experimental_rerun()
