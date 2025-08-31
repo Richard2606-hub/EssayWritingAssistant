@@ -116,12 +116,24 @@ elif st.session_state.step == 4:
 
     evaluation = st.session_state.evaluation
     if evaluation:
-        st.metric("Overall Score", evaluation["scores"]["overall_score"])
-        st.write("✅ Strengths:", ", ".join(evaluation["strengths"]))
-        st.write("⚠️ Weaknesses:", ", ".join(evaluation["weaknesses"]))
+        # Handle missing or different keys safely
+        overall_score = None
+        if "scores" in evaluation:
+            overall_score = evaluation["scores"].get("overall_score") or evaluation["scores"].get("total") or None
+
+        if overall_score is not None:
+            st.metric("Overall Score", overall_score)
+        else:
+            st.warning("⚠️ No overall score found in the evaluation. Please check raw results below.")
+
+        st.write("✅ Strengths:", ", ".join(evaluation.get("strengths", [])))
+        st.write("⚠️ Weaknesses:", ", ".join(evaluation.get("weaknesses", [])))
         st.write("💡 Recommendations:")
-        for rec in evaluation["recommendations"]:
+        for rec in evaluation.get("recommendations", []):
             st.markdown(f"- {rec}")
+
+        st.subheader("📜 Raw Evaluation Data (for debugging)")
+        st.json(evaluation)  # <-- show full raw response for clarity
 
     if "user" in st.session_state:
         user = st.session_state["user"]
@@ -136,3 +148,4 @@ elif st.session_state.step == 4:
 
     st.button("🔄 Try Again", on_click=restart)
     st.button("🏠 Back to Home", on_click=lambda: st.switch_page("Home.py"))
+
