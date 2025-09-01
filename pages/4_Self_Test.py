@@ -1,151 +1,142 @@
 import os
 import sys
 import json
-import datetime
 import streamlit as st
 import google.generativeai as genai
+from datetime import datetime
 from File_handling import read_file_content
-from Connection import get_collection, get_genai_connection
+from Connection import get_genai_connection, get_collection
 
-st.set_page_config(page_title="Self-Test", page_icon="📝")
+st.set_page_config(page_title="Self-Test 📚", page_icon="📚")
 
-# --- Initialize session state ---
-if "step" not in st.session_state:
-    st.session_state.step = 1
-if "responses" not in st.session_state:
-    st.session_state.responses = {}
-if "essay_text" not in st.session_state:
-    st.session_state.essay_text = ""
-if "evaluation" not in st.session_state:
-    st.session_state.evaluation = None
+st.title("📚 Essay Self-Test")
+st.markdown(
+    """
+    Welcome to the **Self-Test Zone**! ✨  
+    Upload your essays to practice and see how much you improve over time.  
+    👉 You need to submit at least **5 essays** to unlock your progress dashboard.  
+    """
+)
 
-# --- Navigation helper ---
-def next_step():
-    st.session_state.step += 1
-    st.rerun()
+# Initialize storage for essays in session state
+if "self_test_essays" not in st.session_state:
+    st.session_state["self_test_essays"] = []
 
-def restart():
-    st.session_state.step = 1
-    st.session_state.responses = {}
-    st.session_state.essay_text = ""
-    st.session_state.evaluation = None
-    st.rerun()
+# Gemini connection
+get_genai_connection()
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    system_instruction=(
+        "You are an SPM English examiner. "
+        "You will analyze essays based on the official SPM marking scheme. "
+        "Categories: Content, Language, Organization. "
+        "Score each out of 30, then compute total (max 100). "
+        "Give short feedback (strengths + weaknesses). "
+        "Return JSON only."
+        """
+        {
+            "type_of_essay": "...",
+            "scores": {
+                "content": ?,
+                "language": ?,
+                "organization": ?,
+                "total": ?
+            },
+            "feedback": {
+                "strengths": ["...", "..."],
+                "weaknesses": ["...", "..."]
+            }
+        }
+        """
+    )
+)
 
-# --- Step 1: Diagnostic Questions ---
-if st.session_state.step == 1:
-    st.title("📝 Self-Test: Step 1 - Diagnostic Questions")
-    st.write("Answer the following questions to help us understand your writing background.")
+# File uploader
+uploaded_file = st.file_uploader(
+    "📤 Upload your essay (txt, docx, pdf, image)",
+    type=["txt", "docx", "pdf", "jpg", "jpeg", "png"]
+)
 
-    questions = [
-        "How confident are you in essay writing? (1-10)",
-        "Which part of essay writing do you struggle with the most? (grammar, ideas, structure, conclusion, etc.)",
-        "Which type of essay do you find easiest? (narrative, argumentative, expository, persuasive)",
-    ]
+if uploaded_file and st.button("Analyze Essay"):
+    essay_content, file_type = read_file_content(uploaded_file)
 
-    for i, q in enumerate(questions, start=1):
-        st.session_state.responses[f"Q{i}"] = st.text_input(q, key=f"q{i}")
-
-    if st.button("➡️ Next: Essay Submission"):
-        next_step()
-
-# --- Step 2: Essay Submission ---
-elif st.session_state.step == 2:
-    st.title("✍️ Self-Test: Step 2 - Essay Submission")
-    st.write("Submit your essay by typing, uploading a file, or uploading an image.")
-
-    essay_text = st.text_area("Type your essay here:", height=200)
-
-    uploaded_file = st.file_uploader("Or upload your essay file (txt, docx, pdf, image):",
-                                     type=["txt", "docx", "pdf", "jpg", "jpeg", "png"])
-
-    if uploaded_file:
-        file_content, file_type = read_file_content(uploaded_file)
-        if file_type != "unsupported":
-            st.session_state.essay_text = file_content
-        else:
-            st.error("Unsupported file type.")
+    if file_type == "unsupported":
+        st.error("❌ Unsupported file type")
     else:
-        st.session_state.essay_text = essay_text
+        with st.spinner("Analyzing essay... ✍️"):
+            response = model.generate_content(essay_content)
+            analysis = response.text
 
-    if st.session_state.essay_text.strip() and st.button("➡️ Next: Get Evaluation"):
-        next_step()
-
-# --- Step 3: Evaluation & Recommendations ---
-elif st.session_state.step == 3:
-    st.title("📊 Self-Test: Step 3 - Evaluation & Recommendations")
-
-    if not st.session_state.evaluation:
-        with st.spinner("Analyzing your essay..."):
-            get_genai_connection()
-            model = genai.GenerativeModel(
-                "gemini-1.5-flash",
-                system_instruction=(
-                    "You are an SPM English essay examiner. "
-                    "Evaluate the essay based on SPM criteria: content, organization, "
-                    "grammar, coherence, and conclusion. "
-                    "Give feedback, strengths, weaknesses, and final score (0-10). "
-                    "Also suggest the most suitable essay type for the student."
-                    "Output JSON format ONLY:\n"
-                    "{'scores': {...}, 'strengths': [...], 'weaknesses': [...], 'recommendations': [...], 'suitable_type': '...'}"
-                )
-            )
-
-            response = model.generate_content(st.session_state.essay_text).text
-
-            # Extract JSON only
-            start = response.find("{")
-            end = response.rfind("}") + 1
+            # Try parse JSON
             try:
-                st.session_state.evaluation = json.loads(response[start:end])
-            except:
-                st.error("Failed to parse evaluation. Please retry.")
+                start = analysis.find("{")
+                end = analysis.rfind("}") + 1
+                analysis_json = json.loads(analysis[start:end])
+            except Exception:
+                st.error("⚠️ Error processing essay. Please try again.")
                 st.stop()
 
-    evaluation = st.session_state.evaluation
-    st.subheader("📌 Results")
-    st.json(evaluation)
+            # Store in session
+            st.session_state["self_test_essays"].append({
+                "essay": essay_content[:200] + "...",  # preview
+                "analysis": analysis_json,
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M")
+            })
 
-    if st.button("➡️ Next: View Progress"):
-        next_step()
+            st.success("✅ Essay analyzed and saved!")
 
-# --- Step 4: Progress Dashboard ---
-elif st.session_state.step == 4:
-    st.title("📈 Self-Test: Step 4 - Progress Dashboard")
+# Progress Tracker
+num_essays = len(st.session_state["self_test_essays"])
+st.progress(min(num_essays, 5) / 5)
+st.write(f"📌 You have uploaded **{num_essays}/5 essays**.")
 
-    st.write("Here’s your current evaluation and how you can improve:")
+# Show essays so far
+if num_essays > 0:
+    st.subheader("📄 Your Essays")
+    for idx, e in enumerate(st.session_state["self_test_essays"], 1):
+        with st.expander(f"Essay {idx} ({e['date']})"):
+            st.write("Preview:", e["essay"])
+            st.json(e["analysis"])
 
-    evaluation = st.session_state.evaluation
-    if evaluation:
-        # Handle missing or different keys safely
-        overall_score = None
-        if "scores" in evaluation:
-            overall_score = evaluation["scores"].get("overall_score") or evaluation["scores"].get("total") or None
+# Unlock dashboard after 5 essays
+if num_essays >= 5:
+    st.subheader("📊 Your Progress Dashboard")
 
-        if overall_score is not None:
-            st.metric("Overall Score", overall_score)
-        else:
-            st.warning("⚠️ No overall score found in the evaluation. Please check raw results below.")
+    import pandas as pd
+    import plotly.express as px
 
-        st.write("✅ Strengths:", ", ".join(evaluation.get("strengths", [])))
-        st.write("⚠️ Weaknesses:", ", ".join(evaluation.get("weaknesses", [])))
-        st.write("💡 Recommendations:")
-        for rec in evaluation.get("recommendations", []):
-            st.markdown(f"- {rec}")
-
-        st.subheader("📜 Raw Evaluation Data (for debugging)")
-        st.json(evaluation)  # <-- show full raw response for clarity
-
-    if "user" in st.session_state:
-        user = st.session_state["user"]
-        collection = get_collection("self_test_results")
-        collection.insert_one({
-            "username": user["username"],
-            "responses": st.session_state.responses,
-            "essay": st.session_state.essay_text,
-            "evaluation": st.session_state.evaluation,
-            "timestamp": datetime.datetime.now()
+    scores_data = []
+    for i, e in enumerate(st.session_state["self_test_essays"], 1):
+        scores = e["analysis"]["scores"]
+        scores_data.append({
+            "Essay": i,
+            "Content": scores["content"],
+            "Language": scores["language"],
+            "Organization": scores["organization"],
+            "Total": scores["total"]
         })
 
-    st.button("🔄 Try Again", on_click=restart)
-    st.button("🏠 Back to Home", on_click=lambda: st.switch_page("Home.py"))
+    df = pd.DataFrame(scores_data)
 
+    st.write("### 📈 Score Trends")
+    fig = px.line(df, x="Essay", y=["Content", "Language", "Organization", "Total"], markers=True)
+    st.plotly_chart(fig)
+
+    st.write("### 📝 Final Recommendation")
+    strengths = []
+    weaknesses = []
+    for e in st.session_state["self_test_essays"]:
+        strengths.extend(e["analysis"]["feedback"]["strengths"])
+        weaknesses.extend(e["analysis"]["feedback"]["weaknesses"])
+
+    st.markdown("**Strengths You Show Repeatedly:**")
+    st.write(set(strengths))
+    st.markdown("**Weaknesses to Focus On:**")
+    st.write(set(weaknesses))
+
+    st.success("🌟 Keep practicing! You’re on track to excel in SPM essays!")
+
+# Reset button
+if st.button("🔄 Start Over"):
+    st.session_state["self_test_essays"] = []
+    st.rerun()
