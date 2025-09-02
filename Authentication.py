@@ -1,47 +1,70 @@
+# authentication.py
 import streamlit as st
 import jwt
 import datetime
 
-# --- Load secret safely ---
-SECRET_KEY = st.secrets.get("JWT_SECRET_KEY")
-if not SECRET_KEY:
-    st.error("❌ JWT secret key missing in secrets.toml")
-    st.stop()
 
-# --- JWT handling ---
+# ---------------------------
+#   Load Secrets Safely
+# ---------------------------
+def get_secret(key: str) -> str:
+    """Retrieve a secret safely with error handling."""
+    try:
+        return st.secrets[key]
+    except KeyError:
+        st.error(f"❌ Missing required secret: `{key}`")
+        st.stop()  # Halt execution if secret is missing
+
+
+SECRET_KEY = get_secret("JWT_SECRET_KEY")
+
+
+# ---------------------------
+#   JWT Helpers
+# ---------------------------
 def generate_jwt(user_id: str, username: str) -> str:
-    """Generate a JWT token (expires in 1 hour)."""
+    """Generate a JWT token with 1-hour expiry."""
     payload = {
         "user_id": user_id,
         "username": username,
-        "exp": datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=1)
+        "exp": datetime.datetime.now(tz=datetime.timezone.utc)
+        + datetime.timedelta(hours=1),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    return token
+
 
 def verify_jwt_token(token: str):
-    """Verify a JWT token and return the user ID if valid."""
+    """Verify a JWT token and return the user ID if valid, else None."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         return payload["user_id"]
     except jwt.ExpiredSignatureError:
-        st.warning("⚠️ Your session has expired. Please log in again.")
+        st.error("⚠️ Session expired. Please log in again.")
         return None
     except jwt.InvalidTokenError:
-        st.warning("⚠️ Invalid session. Please log in again.")
+        st.error("❌ Invalid token. Please log in again.")
         return None
 
+
 def logout():
-    """Clear session and rerun app."""
-    if "jwt_token" in st.session_state:
-        del st.session_state["jwt_token"]
+    """Clear session and force rerun."""
+    st.session_state.pop("jwt_token", None)
+    st.session_state.pop("user", None)
+    st.success("👋 You have been logged out.")
     st.rerun()
 
+
+# ---------------------------
+#   Decorator for Protection
+# ---------------------------
 def login_required(protected_page):
-    """Decorator to protect pages requiring login."""
+    """Protect a page so only logged-in users can view it."""
+
     def wrapper():
         if "jwt_token" not in st.session_state:
-            st.error("🔒 You must log in to view this page.")
-            if st.button("Login/Register"):
+            st.error("🔒 You must log in to access this page.")
+            if st.button("Go to Login/Register", use_container_width=True):
                 st.switch_page("pages/6_Profile.py")
             st.stop()
 
@@ -49,12 +72,14 @@ def login_required(protected_page):
         if user_id:
             protected_page()
         else:
-            if "jwt_token" in st.session_state:
-                del st.session_state["jwt_token"]
-            st.rerun()
+            logout()  # Auto-logout on invalid/expired token
+
     return wrapper
 
-# --- Example home page (optional) ---
+
+# ---------------------------
+#   Example Public/Home Page
+# ---------------------------
 def home_page():
-    st.title("Home")
-    st.write("✅ Public page, accessible without login.")
+    st.title("🏠 Home")
+    st.write("This page is accessible to all users.")
