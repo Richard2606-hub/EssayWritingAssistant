@@ -1,10 +1,9 @@
-# Home.py
 import streamlit as st
 
-# --- MUST be first Streamlit call ---
+# --- Page config ---
 st.set_page_config(page_title="WriteSmart", page_icon="📝", layout="wide")
 
-# --- Light, stable styling (no fragile selectors) ---
+# --- Styling ---
 st.markdown("""
     <style>
       .hero { text-align:center; margin-top:0.5rem; }
@@ -18,23 +17,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Header / hero ---
+# --- Hero section ---
 st.markdown('<div class="hero"><h1>✍️ WriteSmart</h1>'
             '<p>Your AI writing buddy for SPM • MUET • IELTS</p></div>',
             unsafe_allow_html=True)
 st.write("")
+st.info("💡 Tip: If navigation buttons don’t work, use the sidebar page list.")
 
-st.info("Tip: If navigation buttons don’t work on your Streamlit version, use the sidebar page list.", icon="💡")
-
-# Safe helper for navigation across Streamlit versions
+# --- Navigation helper ---
 def go(path: str):
+    """Navigate safely across Streamlit versions."""
     if hasattr(st, "switch_page"):
         try:
             st.switch_page(path)
             return
         except Exception:
             pass
-    st.warning("Direct navigation isn’t supported in this version. Please open the page from the left sidebar.", icon="🧭")
+    st.warning("🧭 Direct navigation not supported. Please use the sidebar.")
 
 # --- Feature grid ---
 col1, col2 = st.columns(2, gap="large")
