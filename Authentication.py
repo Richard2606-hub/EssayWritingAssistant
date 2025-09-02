@@ -2,7 +2,9 @@ import streamlit as st
 import jwt
 import datetime
 
-SECRET_KEY = st.secrets["JWT_SECRET_KEY"]
+SECRET_KEY = st.secrets.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    st.error("Missing JWT_SECRET_KEY in secrets.toml. Authentication will fail.")
 
 def generate_jwt(user_id, username):
     """Generate a JWT token."""
