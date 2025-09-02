@@ -7,6 +7,13 @@ MONGODB_URI = st.secrets["MONGODB_URI"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 GEMINIKEY = st.secrets["GOOGLE_API_KEY"]
 
+if not MONGODB_URI:
+    st.error("Missing MongoDB URI. Please set MONGODB_URI in secrets.toml.")
+if not OPENAI_API_KEY:
+    st.error("Missing OpenAI API key. Please set OPENAI_API_KEY in secrets.toml.")
+if not GEMINIKEY:
+    st.warning("Google API key is missing. Some features may not work.")
+
 # MongoDB connection (replace with your actual connection string)
 @st.cache_resource
 def init_connection():
