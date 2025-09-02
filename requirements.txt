@@ -31,4 +31,5 @@ python-dateutil==2.9.0.post0
 pytz==2024.2
 
 # Optional: for testing & dev
-wat
+watchdog==5.0.3   # Auto reload
+ipython==8.28.0   # Interactive debugging
