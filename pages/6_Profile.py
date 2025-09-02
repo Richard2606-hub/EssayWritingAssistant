@@ -5,6 +5,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from bson import ObjectId
+from Authentication import generate_jwt, verify_jwt_token, logout
+
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_collection
