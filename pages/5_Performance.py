@@ -10,6 +10,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_collection
 from Authentication import login_required
 from Data_Visualization import display_suggestion, display_user_analysis, display_scores_over_time
+from Connection import get_collection
+from Authentication import login_required
+
 
 st.write("# Performance 📊")
 
