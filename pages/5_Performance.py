@@ -1,139 +1,76 @@
-import streamlit as st
+# pages/5_Performance.py
+import os, sys
 import pandas as pd
-import plotly.express as px
-import matplotlib.pyplot as plt
+import streamlit as st
 
-st.set_page_config(page_title="Performance", page_icon="📊")
-
-import sys, os
+st.set_page_config(page_title="Performance", page_icon="📊", layout="wide")
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_collection
 from Authentication import login_required
 from Data_Visualization import display_suggestion, display_user_analysis, display_scores_over_time
-from Connection import get_collection
-from Authentication import login_required
-
 
 st.write("# Performance 📊")
 
-def display_suggestion(suggestions):
-
-    # Display essay type
-    st.header("Essay Type")
-    st.write(suggestions["essay_score"]["type_of_essay"])
-
-    scores = suggestions['essay_score']['scores']
-    scores_df = pd.DataFrame(list(scores.items()), columns=['Category', 'Score'])
-    # Prepare data for the histogram
-    scores_df['Category'] = scores_df['Category'].map(lambda x: x.replace('_', ' ').title())
-
-    fig = px.bar(scores_df, y='Category', x='Score', color='Score',
-             labels={'Score': 'Scores', 'Category': 'Score Categories'},
-             title='Essay Evaluation Scores',
-             text='Score')
-
-    fig.update_layout(showlegend=False)
-    fig.update_layout(xaxis=dict(range=[0, 10]))
-
-    st.header("Scores")
-    # Show the figure in Streamlit
-    st.plotly_chart(fig)
-
-    # Display scores
-    scores_df["Score"] = scores_df["Score"].map("{}/10".format)
-    st.dataframe(scores_df, use_container_width=True, hide_index=True)
-
-    # Display suggestions
-    st.header("Suggestions")
-    for s in suggestions["essay_score"]["essay_suggestion"]:
-        with st.expander(f"Section {s['section']}"):
-            st.subheader("Original Text")
-            st.write(s["original_text"])
-            st.subheader("Suggestion")
-            st.write(s["suggestion"])
-            st.subheader("Improved Version")
-            st.write(s["improved_version"])
-
-def display_user_analysis(user_analysis):
-    # Display writing style and role
-    st.header("Writing Style and Role")
-    st.write(f"**Role:** {user_analysis['game_like_role']}")
-    st.write(f"**Writing Style:** {user_analysis['writing_style']}")
-
-    # Display strengths
-    st.header("Strengths")
-    for strength in user_analysis["strengths"]:
-        st.write(f"- {strength}")
-
-    # Display weaknesses
-    st.header("Weaknesses")
-    for weakness in user_analysis["weaknesses"]:
-        st.write(f"- {weakness}")
-
-    # Create a pie chart for strengths and weaknesses
-    categories = ['Strengths', 'Weaknesses']
-    values = [len(user_analysis["strengths"]), len(user_analysis["weaknesses"])]
-
-    plt.figure(figsize=(4, 4))  # Adjust the size to be smaller
-    plt.pie(values, labels=categories, autopct='%1.1f%%', startangle=90, colors=['lightgreen', 'salmon'])
-    plt.title('Strengths vs. Weaknesses')
-
-    st.pyplot(plt)
-
-# Function to retrieve past performance
 def get_past_performance(username):
     return list(get_collection("user_performance").find({"username": username}).sort("timestamp", -1))
 
-# Function to retrieve latest user analysis
-def get_user_analysis(username):
-    return get_collection("user_analysis").find_one({"username": username}, sort=[( '_id', -1 )])
+def get_user_analysis_doc(username):
+    return get_collection("user_analysis").find_one({"username": username}, sort=[('_id', -1)])
+
+def get_self_tests(username):
+    # If you saved self-tests to DB in 4_Self_Test, fetch them here
+    cur = get_collection("self_test_attempts").find({"username": username}).sort("timestamp", -1)
+    return [x["attempt"] for x in cur]
 
 @login_required
 def main():
+    tabs = st.tabs(["Overall Performance", "Latest User Analysis", "Past Suggestions", "Self-Test History"])
 
-    tab1, tab2, tab3= st.tabs(["Overall Performance", "User Analysis", "Past Performance"])
-
-    # Display past performance and analysis
     username = st.session_state["user"]["username"]
-    # Filter entries for the selected username
     past_performance = get_past_performance(username)
-    user_analysis = get_user_analysis(username)
+    user_analysis = get_user_analysis_doc(username)
+    self_tests = get_self_tests(username)
 
-    with tab1:
-        user_entries = get_past_performance(username)
+    with tabs[0]:
+        if past_performance:
+            df = pd.DataFrame(past_performance)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            display_scores_over_time(df, username)
+        else:
+            st.info("No saved suggestions yet. Submit an essay in **Essay Suggestions**.")
 
-        # Convert to DataFrame for easier manipulation
-        df = pd.DataFrame(user_entries)
-
-        # Ensure timestamp is in datetime format
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-        # Display scores over time
-        display_scores_over_time(df, username)
-
-    # Select a specific entry based on timestamp
-    with tab2:
+    with tabs[1]:
         if user_analysis:
             st.write("### Latest User Analysis")
             display_user_analysis(user_analysis['user_info'])
         else:
-            st.write("No user analysis available.")
-            if st.button("Go to User Analysis"):
-                st.switch_page("1_User Analysis.py")
+            st.info("No user analysis available. Try **User Analysis** page.")
 
-    with tab3:
+    with tabs[2]:
         if past_performance:
-            selected_entry_index = st.selectbox(
-                "Select an entry",
-                [f"{i+1} - {past_performance[i]['timestamp']}" for i in range(len(past_performance))],
-            )
-            index = int(selected_entry_index.split(" - ")[0]) - 1
-            selected_entry = past_performance[index]
-            st.write("### Selected Entry")
-            display_suggestion(selected_entry["suggestions"])
+            # Select and render one suggestion
+            label_list = [f"{i+1} - {past_performance[i]['timestamp']}" for i in range(len(past_performance))]
+            selected = st.selectbox("Select a saved suggestion", label_list)
+            idx = int(selected.split(" - ")[0]) - 1
+            display_suggestion(past_performance[idx]["suggestions"])
         else:
-            st.write("No past performance available.")
-            if st.button("Go to Essay Suggestion"):
-                st.switch_page("2_Essay_Suggestion.py")
+            st.info("No past suggestions available.")
+
+    with tabs[3]:
+        if self_tests:
+            st.write(f"Found **{len(self_tests)}** self-test attempts saved.")
+            rows = []
+            for i, e in enumerate(self_tests, 1):
+                s = e.get("scores", {})
+                rows.append({
+                    "Attempt": i, "Date": e.get("date","—"), "Part": e.get("part","—"), "Type": e.get("type_of_essay","—"),
+                    "Content": s.get("content"), "Organization": s.get("organization"),
+                    "Language": s.get("language"), "Communicative": s.get("communicative"),
+                    "Total(20)": s.get("total_out_of_20")
+                })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No self-test attempts in the database yet.")
 
 main()
