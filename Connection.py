@@ -1,114 +1,173 @@
-# connection.py
+# Connection.py
+"""
+Centralised connections for MongoDB, OpenAI, and Google Generative AI (Gemini).
+
+- Reads required secrets from Streamlit's st.secrets
+  * MONGODB_URI
+  * OPENAI_API_KEY
+  * GOOGLE_API_KEY
+- Provides cached clients and simple health checks.
+"""
+
+from __future__ import annotations
+
+import os
+import traceback
 import streamlit as st
 import pymongo
-import datetime
-from openai import OpenAI
+from pymongo.errors import ConnectionFailure, ConfigurationError, ServerSelectionTimeoutError
+
+# Optional: only import OpenAI if you actually call it
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover
+    OpenAI = None  # type: ignore
+
 import google.generativeai as genai
 
-# --- Secrets ---
-MONGODB_URI = st.secrets["MONGODB_URI"]
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-GEMINIKEY = st.secrets["GOOGLE_API_KEY"]
 
-# --- MongoDB Connection ---
-@st.cache_resource
-def init_connection():
-    return pymongo.MongoClient(MONGODB_URI)
+# ---------------------------
+# Secrets & helpers
+# ---------------------------
 
-def get_db():
-    client = init_connection()
-    return client["essay_assistant_db"]
+def _get_secret(key: str, *, required: bool = True, default: str | None = None) -> str:
+    """
+    Read a secret from st.secrets with a clear error message.
+    """
+    try:
+        val = st.secrets[key]
+        if not isinstance(val, str) or not val.strip():
+            raise KeyError
+        return val.strip()
+    except KeyError:
+        if required:
+            st.error(f"❌ Missing or empty secret: `{key}`. "
+                     f"Add it to your `.streamlit/secrets.toml`.")
+            st.stop()
+        return default or ""
 
-def get_collection(collection_name: str):
-    db = get_db()
-    return db[collection_name]
 
-# --- OpenAI Connection ---
-@st.cache_resource
-def get_openai_connection():
-    return OpenAI(api_key=OPENAI_API_KEY)
+# Required secrets (fail fast with useful message)
+MONGODB_URI: str = _get_secret("MONGODB_URI")
+OPENAI_API_KEY: str = _get_secret("OPENAI_API_KEY", required=False, default="")
+GEMINI_API_KEY: str = _get_secret("GOOGLE_API_KEY")
 
-# --- Gemini Connection ---
+
+# ---------------------------
+# MongoDB
+# ---------------------------
+
+@st.cache_resource(show_spinner=False)
+def init_connection() -> pymongo.MongoClient:
+    """
+    Initialise a cached MongoDB client.
+    """
+    try:
+        client = pymongo.MongoClient(
+            MONGODB_URI,
+            serverSelectionTimeoutMS=5000,  # fail fast
+            connectTimeoutMS=5000,
+            socketTimeoutMS=10000,
+        )
+        # Ping once to ensure connectivity
+        client.admin.command("ping")
+        return client
+    except (ConnectionFailure, ConfigurationError, ServerSelectionTimeoutError) as e:
+        st.error("❌ Could not connect to MongoDB. "
+                 "Check your `MONGODB_URI` and that the server is running.")
+        st.caption(f"Details: {e}")
+        st.stop()
+    except Exception as e:  # pragma: no cover
+        st.error("❌ Unexpected MongoDB error.")
+        st.exception(e)
+        st.stop()
+
+
+def get_db(db_name: str = "essay_assistant_db") -> pymongo.database.Database:
+    return init_connection()[db_name]
+
+
+def get_collection(collection_name: str, db_name: str = "essay_assistant_db") -> pymongo.collection.Collection:
+    return get_db(db_name)[collection_name]
+
+
+def ping_mongo() -> bool:
+    """
+    Return True if MongoDB responds to ping.
+    """
+    try:
+        init_connection().admin.command("ping")
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------
+# OpenAI (optional)
+# ---------------------------
+
+@st.cache_resource(show_spinner=False)
+def get_openai_connection() -> OpenAI | None:
+    """
+    Returns a cached OpenAI client or None if no API key is configured.
+    """
+    if not OPENAI_API_KEY:
+        # Not fatal—some pages use Gemini only.
+        st.warning("🔐 OPENAI_API_KEY not set. Skipping OpenAI client.")
+        return None
+    if OpenAI is None:
+        st.warning("⚠️ `openai` package not available. Skipping OpenAI client.")
+        return None
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        return client
+    except Exception as e:  # pragma: no cover
+        st.error("❌ Failed to initialise OpenAI client.")
+        st.caption(str(e))
+        return None
+
+
+# ---------------------------
+# Google Generative AI (Gemini)
+# ---------------------------
+
+@st.cache_resource(show_spinner=False)
 def get_genai_connection():
-    if not GEMINIKEY:
-        raise ValueError("Google API key is missing.")
-    genai.configure(api_key=GEMINIKEY)
-    return genai
+    """
+    Configure and return the google.generativeai module (singleton style).
+    """
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        return genai
+    except Exception as e:  # pragma: no cover
+        st.error("❌ Failed to configure Google Generative AI (Gemini).")
+        st.caption(str(e))
+        st.stop()
 
-# --------------------------
-#   CHAT MANAGEMENT
-# --------------------------
-def save_chat(user_id: str, messages: list):
-    """
-    Save chat history for a given user.
-    Uses upsert so the same user gets their chat updated instead of duplicated.
-    """
-    chats = get_collection("chats")
-    chats.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "messages": messages,
-            "updated_at": datetime.datetime.utcnow()
-        }},
-        upsert=True
-    )
 
-def load_chat(user_id: str):
+def gemini_health_check() -> bool:
     """
-    Load chat history for a given user.
-    Returns messages list or None if no history exists.
+    Lightweight check: attempts to create a trivial model instance.
     """
-    chats = get_collection("chats")
-    record = chats.find_one({"user_id": user_id})
-    return record["messages"] if record else None
+    try:
+        _ = genai.GenerativeModel("gemini-1.5-flash")
+        return True
+    except Exception:
+        return False
 
-# --------------------------
-#   ESSAY PERFORMANCE DATA
-# --------------------------
-def save_essay_performance(user_id: str, essay_text: str, score: int, comments: str, suggestions: list):
+
+# ---------------------------
+# Optional overall health check
+# ---------------------------
+
+def health_report() -> dict:
     """
-    Save essay performance results into MongoDB.
+    Return a quick health snapshot useful for a debug panel.
     """
-    performance_collection = get_collection("performance")
-    performance_data = {
-        "user_id": user_id,
-        "essay_text": essay_text,
-        "score": score,
-        "comments": comments,
-        "suggestions": suggestions,
-        "timestamp": datetime.datetime.utcnow()
+    report = {
+        "mongo_connected": ping_mongo(),
+        "openai_configured": bool(OPENAI_API_KEY),
+        "gemini_configured": bool(GEMINI_API_KEY),
+        "gemini_usable": gemini_health_check(),
     }
-    performance_collection.insert_one(performance_data)
-
-def get_past_performance(user_id: str):
-    """
-    Retrieve past essay performance records for a user.
-    """
-    performance_collection = get_collection("performance")
-    return list(performance_collection.find({"user_id": user_id}).sort("timestamp", -1))
-
-# --------------------------
-#   USER ANALYSIS
-# --------------------------
-def save_user_analysis(user_id: str, writing_style: dict):
-    """
-    Save or update user’s writing style analysis.
-    """
-    analysis_collection = get_collection("analysis")
-    analysis_collection.update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
-                "writing_style": writing_style,
-                "updated_at": datetime.datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
-
-def get_user_analysis(user_id: str):
-    """
-    Retrieve latest user analysis.
-    """
-    analysis_collection = get_collection("analysis")
-    return analysis_collection.find_one({"user_id": user_id})
+    return report
