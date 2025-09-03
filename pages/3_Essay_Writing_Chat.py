@@ -1,43 +1,37 @@
-import os
-import sys
+# pages/3_Essay_Writing_Chat.py
+import os, sys
 import streamlit as st
 import google.generativeai as genai
 from datetime import datetime
 
-# --- Page config ---
 st.set_page_config(page_title="Essay Writing Chat", page_icon="💬")
-
-# --- Import helpers ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_genai_connection, get_collection
 from Authentication import verify_jwt_token
 
-# --- DB Setup ---
-chats_collection = get_collection("chats")
-
-# --- Page Header ---
 st.markdown("<h1 style='text-align: center; color: #4CAF50;'>💬 Essay Writing Chat</h1>", unsafe_allow_html=True)
-st.write("Your personal essay coach! Ask me anything about essay writing ✍️")
+st.write("Your personal essay coach! Ask me anything about SPM essay writing ✍️")
 
-# --- Initialize system prompt ---
 if "messages" not in st.session_state:
     system_prompt = (
-        "You are an essay teacher and will only answer questions related to essay writing. "
-        "You can explain essay structures, write short samples, or guide improvements. "
-        "If a question is not related to essay writing, politely refuse."
+        "You are an SPM Paper 2 essay coach for secondary school students.\n"
+        "SCOPE: ONLY essay-writing (planning, structure, linking, tone, grammar, model openings).\n"
+        "If off-topic, politely refuse and suggest an essay-related angle.\n"
+        "When asked for a sample, give a brief model paragraph or outline.\n"
+        "Align guidance to SPM task types:\n"
+        "- Part 1: informal email reply (greeting, respond to all notes, closing; ~80 words).\n"
+        "- Part 2: guided essay 125–150 words using ALL given notes.\n"
+        "- Part 3: choose ONE of Article | Narrative (Story) | Report | Review; match audience and format.\n"
     )
     if "user_info" in st.session_state:
-        system_prompt += "\nStudent info:\n"
-        system_prompt += "\n".join(
-            f"- {k}: {v}" for k, v in st.session_state.user_info.items()
-        )
-
+        system_prompt += "\nStudent info:\n" + "\n".join(f"- {k}: {v}" for k, v in st.session_state.user_info.items())
     st.session_state.messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "assistant", "content": "👋 Hello! I’m your essay coach. What would you like help with today?"}
+        {"role": "assistant", "content": "👋 Hello! I’m your essay coach. How can I help?"}
     ]
 
-# --- Load previous chat if user logged in ---
+# Load previous chat if logged in
+chats_collection = get_collection("chats")
 user_id = None
 if "jwt_token" in st.session_state:
     user_id = verify_jwt_token(st.session_state["jwt_token"])
@@ -46,76 +40,63 @@ if "jwt_token" in st.session_state:
         if past_chat:
             st.session_state.messages = past_chat["messages"]
 
-# --- Display messages (skip system prompt) ---
-for message in st.session_state.messages[1:]:
-    if message["role"] == "user":
-        with st.chat_message("user", avatar="🧑‍🎓"):
-            st.markdown(message["content"])
-    else:
-        with st.chat_message("assistant", avatar="📝"):
-            st.markdown(message["content"])
+# Display
+for m in st.session_state.messages[1:]:
+    with st.chat_message("user" if m["role"]=="user" else "assistant",
+                         avatar="🧑‍🎓" if m["role"]=="user" else "📝"):
+        st.markdown(m["content"])
 
-# --- Gemini connection ---
-client = get_genai_connection()
+# Model
+get_genai_connection()
 model = genai.GenerativeModel(
     "gemini-1.5-flash",
     system_instruction=st.session_state.messages[0]["content"]
 )
 
-# --- Handle chat input ---
+# Input
 if prompt := st.chat_input("Type your essay question here..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role":"user","content":prompt})
     with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="📝"):
         with st.spinner("Thinking..."):
             try:
-                response = model.generate_content(
-                    [{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages]
+                reply = model.generate_content(
+                    [{"role": m["role"], "parts":[m["content"]]} for m in st.session_state.messages]
                 ).text
             except Exception as e:
-                response = f"⚠️ Error: {e}"
+                reply = f"⚠️ Error: {e}"
+            st.markdown(reply)
 
-            st.markdown(response)
+    st.session_state.messages.append({"role":"assistant","content":reply})
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-    # --- Save chat to DB if logged in ---
+    # Save chat if logged in
     if user_id:
         chats_collection.update_one(
             {"user_id": user_id},
-            {
-                "$set": {
-                    "messages": st.session_state.messages,
-                    "updated_at": datetime.utcnow()
-                }
-            },
+            {"$set":{"messages": st.session_state.messages, "updated_at": datetime.utcnow()}},
             upsert=True
         )
 
-# --- Quick action buttons ---
 st.markdown("---")
 st.write("🎯 Quick Help:")
-col1, col2, col3 = st.columns(3)
-
-with col1:
+c1,c2,c3 = st.columns(3)
+with c1:
     if st.button("📖 Sample Essay"):
         st.session_state.messages.append(
-            {"role": "user", "content": "Write me a short sample essay on 'Healthy Lifestyle'."}
+            {"role":"user","content":"Write a short sample opening for a Part 2 guided essay on healthy lifestyle."}
         )
-        st.experimental_rerun()
-
-with col2:
+        st.rerun()
+with c2:
     if st.button("📝 Improve My Introduction"):
         st.session_state.messages.append(
-            {"role": "user", "content": "How can I write a better essay introduction?"}
+            {"role":"user","content":"How can I write a stronger thesis/intro for a guided essay?"}
         )
-        st.experimental_rerun()
-
-with col3:
+        st.rerun()
+with c3:
     if st.button("🎯 Conclusion Tips"):
         st.session_state.messages.append(
-            {"role": "user", "content": "Give me some tips on writing essay conclusions."}
+            {"role":"user","content":"Give 3 tips for writing a good conclusion for Part 3 Article."}
         )
-        st.experimental_rerun()
+        st.rerun()
