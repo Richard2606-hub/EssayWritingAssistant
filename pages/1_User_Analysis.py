@@ -1,128 +1,95 @@
-import json
-import os
-import sys
-import datetime
+# pages/1_User_Analysis.py
+import os, sys, json, datetime
 import streamlit as st
 import google.generativeai as genai
-from File_handling import read_file_content
+
+st.set_page_config(page_title="User Analysis", page_icon="🔍", layout="wide")
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Connection import get_collection, get_genai_connection
+from File_handling import read_file_content
 from Data_Visualization import display_user_analysis
 
-# --- Page Config ---
-st.set_page_config(page_title="User Analysis", page_icon="🔍", layout="wide")
-
-# --- Page Header ---
 st.title("🔍 User Analysis")
-st.write("Upload your essay to receive **instant feedback** on your strengths, weaknesses, and writing style.")
+st.write("Upload your essay to get feedback aligned to **SPM Paper 2**.")
 
-# --- Model Setup (SPM-focused later) ---
 get_genai_connection()
 model = genai.GenerativeModel(
     "gemini-1.5-flash",
-    system_instruction = (
-        You are an SPM English Paper 2 writing coach.
-
-TASK
-- Analyse the learner’s writing (text/doc/pdf/image OCR) against SPM Paper 2 expectations.
-- Report strengths and weaknesses that a secondary-school student can act on.
-- Identify likely writing_style (Narrative | Descriptive | Expository | Argumentative | Email | Mixed).
-- Give a motivating game_like_role (fun nickname).
-- If possible, estimate indicative component scores using FOUR lenses, each 0–5:
-  content, organization, language, communicative (format/task fulfillment).
-- Output JSON ONLY (no code fences).
-
-OUTPUT SCHEMA
-{
-  "strengths": ["...", "..."],
-  "weaknesses": ["...", "..."],
-  "writing_style": "Narrative | Descriptive | Expository | Argumentative | Email | Mixed",
-  "game_like_role": "The Persuader",
-  "indicative_scores": {
-    "content": 0-5,
-    "organization": 0-5,
-    "language": 0-5,
-    "communicative": 0-5,
-    "total_out_of_20": 0-20
-  },
-  "top_priorities": ["short, concrete actions, max 3"]
-}
-
-GUIDANCE (for the model)
-- CONTENT: relevance, coverage of prompts/notes, idea development.
-- ORGANIZATION: paragraphing, sequencing, cohesion/linkers.
-- LANGUAGE: grammar accuracy, vocabulary range/precision, sentence variety; appropriate tone.
-- COMMUNICATIVE: fulfills task & text-type conventions (e.g., email greeting/closing, report headings, article title).
-- Keep bullets short, student-friendly. JSON only.
-
+    system_instruction=(
+        "You are an SPM English Paper 2 writing coach.\n"
+        "TASK\n"
+        "- Analyse the learner’s writing (text/doc/pdf/image OCR) against SPM Paper 2 expectations.\n"
+        "- Provide strengths and weaknesses that are actionable for secondary school students.\n"
+        "- Identify writing_style (Narrative | Descriptive | Expository | Argumentative | Email | Mixed).\n"
+        "- Give a motivating game_like_role.\n"
+        "- If possible, estimate indicative component scores using FOUR lenses (0–5 each): content, organization, language, communicative.\n"
+        "- Sum to total_out_of_20.\n"
+        "- Output JSON ONLY (no code fences).\n\n"
+        "OUTPUT SCHEMA\n"
+        "{\n"
+        '  "strengths": ["...", "..."],\n'
+        '  "weaknesses": ["...", "..."],\n'
+        '  "writing_style": "Narrative | Descriptive | Expository | Argumentative | Email | Mixed",\n'
+        '  "game_like_role": "The Persuader",\n'
+        '  "indicative_scores": {\n'
+        '    "content": 0-5, "organization": 0-5, "language": 0-5, "communicative": 0-5,\n'
+        '    "total_out_of_20": 0-20\n'
+        "  },\n"
+        '  "top_priorities": ["short, concrete actions, max 3"]\n'
+        "}\n"
+        "RULES: JSON only."
     )
 )
 
-# --- Helper functions ---
-def get_user_analysis(files):
-    response = model.generate_content(files)
-    return response.text
+def _safe_parse_json(raw_text: str):
+    start, end = raw_text.find("{"), raw_text.rfind("}") + 1
+    if start == -1 or end <= 0: return None
+    try: return json.loads(raw_text[start:end])
+    except Exception: return None
 
 def update_user_info(response_json):
-    """Save results into session and DB"""
     st.session_state["user_analysis"] = response_json
-
-    # Save to history (for Objective 3 - progress tracking)
-    score = response_json.get("score", None)
-    if score is not None:
-        history_entry = {
-            "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "score": score
-        }
-        if "user_history" not in st.session_state:
-            st.session_state["user_history"] = []
-        st.session_state["user_history"].append(history_entry)
-
-    # Save into DB if user is logged in
     if "user" in st.session_state:
         user = st.session_state["user"]
-        user_analysis_collection = get_collection("user_analysis")
-        new_user_info = {
+        get_collection("user_analysis").insert_one({
             "username": user["username"],
             "user_info": response_json,
             "date": datetime.datetime.now(tz=datetime.timezone.utc),
-        }
-        user_analysis_collection.insert_one(new_user_info)
+        })
 
-# --- File Upload ---
 uploaded_files = st.file_uploader(
-    "📂 Upload your essay file (txt, docx, pdf, or image)",
+    "📂 Upload text/docx/pdf/image",
     type=["jpg", "jpeg", "png", "txt", "doc", "docx", "pdf"],
     accept_multiple_files=True
 )
 
-if uploaded_files:
-    if st.button("🔎 Analyze My Writing"):
-        files = []
-        for file in uploaded_files:
-            file_content, file_type = read_file_content(file)
-            if file_type != "unsupported":
-                files.append(file_content)
-            else:
-                st.error(f"❌ Unsupported file type: {file.name}")
+if uploaded_files and st.button("🔎 Analyze My Writing"):
+    files = []
+    for file in uploaded_files:
+        content, ftype = read_file_content(file)
+        if ftype == "unsupported":
+            st.error(f"❌ Unsupported file: {file.name}")
+        else:
+            files.append(content)
 
-        # --- AI Analysis ---
-        invalid_json = True
-        while invalid_json:
-            with st.spinner("Analyzing your essay... please wait ⏳"):
-                response = get_user_analysis(files)
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                response = response[start:end]
+    with st.spinner("Analyzing..."):
+        raw = model.generate_content(files).text
+        js = _safe_parse_json(raw)
+        if not js:
+            st.error("⚠️ Could not parse response. Try again.")
+        else:
+            indic = js.get("indicative_scores", {})
+            need = ["content","organization","language","communicative"]
+            if "total_out_of_20" not in indic and all(k in indic for k in need):
+                try:
+                    indic["total_out_of_20"] = int(
+                        indic["content"] + indic["organization"] + indic["language"] + indic["communicative"]
+                    )
+                    js["indicative_scores"] = indic
+                except Exception:
+                    pass
+            update_user_info(js)
 
-            try:
-                response_json = json.loads(response)
-                invalid_json = False
-            except json.JSONDecodeError:
-                pass
-
-        update_user_info(response_json)
-
-# --- Display Results ---
 if "user_analysis" in st.session_state:
-    st.success("✅ Analysis complete! Here’s your feedback:")
+    st.success("✅ Analysis complete!")
     display_user_analysis(st.session_state["user_analysis"])
