@@ -1,108 +1,102 @@
+# Data_Visualization.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 
+def display_suggestion(suggestions):
+    """Render suggestions in your historical format, but supports 4 lenses + total(20)."""
+    st.header("Essay Type")
+    st.write(suggestions["essay_score"]["type_of_essay"])
 
-def display_suggestion(suggestions: dict):
-    """Display essay suggestions, scores, and improvements."""
+    scores = suggestions['essay_score']['scores']
+    # Build lenses
+    rows = []
+    lens_map = [
+        ("content","Content"),
+        ("organization","Organization"),
+        ("language","Language"),
+        ("communicative","Communicative"),
+    ]
+    for key, label in lens_map:
+        if key in scores:
+            rows.append({"Category": label, "Score": float(scores[key])})
 
-    # --- Essay Type ---
-    st.header("📑 Essay Type")
-    st.write(suggestions["essay_score"].get("type_of_essay", "N/A"))
+    df = pd.DataFrame(rows)
+    fig = px.bar(df, y='Category', x='Score', color='Score',
+                 labels={'Score': 'Score (0–5)', 'Category': 'Lenses'},
+                 title='SPM Lenses (0–5 each)', text='Score')
+    fig.update_layout(showlegend=False, xaxis=dict(range=[0,5]))
+    st.header("Scores")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # --- Scores ---
-    scores = suggestions["essay_score"].get("scores", {})
-    if not scores:
-        st.warning("⚠️ No scores available.")
-        return
+    if "total_out_of_20" in scores:
+        st.markdown(f"**Total (out of 20):** `{int(scores['total_out_of_20'])}`")
 
-    scores_df = pd.DataFrame(list(scores.items()), columns=["Category", "Score"])
-    scores_df["Category"] = scores_df["Category"].map(lambda x: x.replace("_", " ").title())
+    df_table = df.copy()
+    if not df_table.empty:
+        df_table["Score"] = df_table["Score"].map(lambda v: f"{v:.1f}/5")
+        st.dataframe(df_table, use_container_width=True, hide_index=True)
 
-    # Bar chart
-    fig = px.bar(
-        scores_df, y="Category", x="Score", color="Score",
-        labels={"Score": "Scores", "Category": "Score Categories"},
-        title="Essay Evaluation Scores", text="Score"
-    )
-    fig.update_layout(showlegend=False, xaxis=dict(range=[0, 10]))
+    st.header("Suggestions")
+    for s in suggestions["essay_score"]["essay_suggestion"]:
+        with st.expander(f"Section {s.get('section','-')}"):
+            st.subheader("Original Text"); st.write(s.get("original_text","—"))
+            st.subheader("Suggestion");    st.write(s.get("suggestion","—"))
+            st.subheader("Improved Version"); st.write(s.get("improved_version","—"))
 
-    st.header("📊 Scores Overview")
-    st.plotly_chart(fig)
+def display_user_analysis(user_analysis):
+    st.header("Writing Style and Role")
+    st.write(f"**Role:** {user_analysis.get('game_like_role','—')}")
+    st.write(f"**Writing Style:** {user_analysis.get('writing_style','—')}")
 
-    # Data table
-    scores_df["Score"] = scores_df["Score"].map("{}/10".format)
-    st.dataframe(scores_df, use_container_width=True, hide_index=True)
+    indic = user_analysis.get("indicative_scores")
+    if indic and all(k in indic for k in ["content","organization","language","communicative"]):
+        rows = [
+            {"Category":"Content","Score":indic["content"]},
+            {"Category":"Organization","Score":indic["organization"]},
+            {"Category":"Language","Score":indic["language"]},
+            {"Category":"Communicative","Score":indic["communicative"]},
+        ]
+        df = pd.DataFrame(rows)
+        fig = px.bar(df, y="Category", x="Score", color="Score",
+                     labels={"Score":"Score (0–5)","Category":"Lenses"},
+                     title="Indicative SPM Lenses", text="Score")
+        fig.update_layout(showlegend=False, xaxis=dict(range=[0,5]))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"Total (20): {indic.get('total_out_of_20','—')}")
 
-    # --- Suggestions ---
-    st.header("💡 Suggestions")
-    for s in suggestions["essay_score"].get("essay_suggestion", []):
-        with st.expander(f"✏️ Section {s['section']}"):
-            st.subheader("Original Text")
-            st.write(s["original_text"])
-            st.subheader("Suggestion")
-            st.write(s["suggestion"])
-            st.subheader("Improved Version")
-            st.write(s["improved_version"])
+    st.header("Strengths")
+    for s in user_analysis.get("strengths", []): st.write(f"- {s}")
 
+    st.header("Weaknesses")
+    for w in user_analysis.get("weaknesses", []): st.write(f"- {w}")
 
-def display_user_analysis(user_analysis: dict):
-    """Display user strengths, weaknesses, and role insights."""
-    if not user_analysis:
-        st.warning("⚠️ No user analysis data found.")
-        return
-
-    # Writing style
-    st.header("🖋 Writing Style and Role")
-    st.write(f"**Role:** {user_analysis.get('game_like_role', 'N/A')}")
-    st.write(f"**Writing Style:** {user_analysis.get('writing_style', 'N/A')}")
-
-    # Strengths
-    st.header("💪 Strengths")
-    for strength in user_analysis.get("strengths", []):
-        st.write(f"- {strength}")
-
-    # Weaknesses
-    st.header("⚠️ Weaknesses")
-    for weakness in user_analysis.get("weaknesses", []):
-        st.write(f"- {weakness}")
-
-    # Pie chart
-    categories = ["Strengths", "Weaknesses"]
-    values = [len(user_analysis.get("strengths", [])), len(user_analysis.get("weaknesses", []))]
-
-    if sum(values) > 0:
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.pie(values, labels=categories, autopct="%1.1f%%", startangle=90,
-               colors=["lightgreen", "salmon"])
-        ax.set_title("Strengths vs. Weaknesses")
-        st.pyplot(fig)
-
-
-def display_scores_over_time(user_entries: pd.DataFrame, selected_username: str):
-    """Plot score progress for a user over time."""
-    if user_entries.empty:
-        st.warning("⚠️ No past performance data available.")
-        return
-
+def display_scores_over_time(df: pd.DataFrame, selected_username: str):
+    """df rows contain {'suggestions': {essay_score:{scores: {…}}}, 'timestamp': …}"""
     scores_over_time = pd.DataFrame()
-    for _, entry in user_entries.iterrows():
-        scores = entry.get("suggestions", {}).get("essay_score", {}).get("scores", {})
-        if not scores:
-            continue
-        temp_df = pd.DataFrame(list(scores.items()), columns=["Category", "Score"])
-        temp_df["Timestamp"] = entry["timestamp"]
-        scores_over_time = pd.concat([scores_over_time, temp_df], ignore_index=True)
+    for _, entry in df.iterrows():
+        # support both old and new shapes
+        s = (entry.get('suggestions', {})
+                .get('essay_score', {})
+                .get('scores', {}))
+        ts = entry['timestamp']
+        for key, label in [("content","Content"),("organization","Organization"),
+                           ("language","Language"),("communicative","Communicative")]:
+            if key in s:
+                scores_over_time = pd.concat([scores_over_time, pd.DataFrame([{
+                    "Timestamp": ts, "Category": label, "Score": s[key]
+                }])], ignore_index=True)
+
+        if "total_out_of_20" in s:
+            scores_over_time = pd.concat([scores_over_time, pd.DataFrame([{
+                "Timestamp": ts, "Category": "Total(20)", "Score": s["total_out_of_20"]
+            }])], ignore_index=True)
 
     if scores_over_time.empty:
-        st.warning("⚠️ No valid score data to plot.")
-        return
+        st.info("No scores to plot yet."); return
 
-    fig = px.line(
-        scores_over_time, x="Timestamp", y="Score", color="Category",
-        labels={"Score": "Scores", "Timestamp": "Date"},
-        title=f"📈 Scores Over Time for {selected_username}",
-        markers=True
-    )
-    st.plotly_chart(fig)
+    fig = px.line(scores_over_time, x='Timestamp', y='Score', color='Category',
+                  labels={'Score':'Score', 'Timestamp':'Date'},
+                  title=f'Scores Over Time for {selected_username}', markers=True)
+    st.plotly_chart(fig, use_container_width=True)
