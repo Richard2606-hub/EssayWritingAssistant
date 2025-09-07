@@ -88,7 +88,7 @@ SYSTEM_PROMPT = (
     "- If unsure, choose nearest integer level for each lens."
 )
 
-model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=SYSTEM_PROMPT)
 
 # --- Helpers ---
 def _safe_parse_json(raw_text: str):
