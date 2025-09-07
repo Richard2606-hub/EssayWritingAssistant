@@ -49,7 +49,7 @@ for m in st.session_state.messages[1:]:
 # Model
 get_genai_connection()
 model = genai.GenerativeModel(
-    "gemini-1.5-flash",
+    "gemini-2.5-flash",
     system_instruction=st.session_state.messages[0]["content"]
 )
 
