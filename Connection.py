@@ -57,6 +57,14 @@ GEMINI_API_KEY: str = _get_secret("GOOGLE_API_KEY")
 # ---------------------------
 # MongoDB
 # ---------------------------
+def ping_mongo(uri="mongodb://localhost:27017/", timeout=2000):
+    try:
+        client = MongoClient(uri, serverSelectionTimeoutMS=timeout)
+        client.admin.command("ping")
+        return True
+    except ServerSelectionTimeoutError:
+        return False
+
 
 @st.cache_resource(show_spinner=False)
 def init_connection() -> pymongo.MongoClient:
