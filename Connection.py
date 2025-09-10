@@ -15,7 +15,7 @@ import os
 import traceback
 import streamlit as st
 import pymongo
-from pymongo.errors import ConnectionFailure, ConfigurationError, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, ConfigurationError, ServerSelectionTimeoutError, MongoClient
 
 # Optional: only import OpenAI if you actually call it
 try:
