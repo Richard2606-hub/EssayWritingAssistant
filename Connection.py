@@ -65,7 +65,10 @@ def init_connection() -> pymongo.MongoClient:
     """
     try:
         client = pymongo.MongoClient(
-            MONGODB_URI
+            MONGODB_URI,
+         serverSelectionTimeoutMS=15000,
+         connectTimeoutMS=15000,
+         socketTimeoutMS=20000,
         )
         # Ping once to ensure connectivity
         client.admin.command("ping")
