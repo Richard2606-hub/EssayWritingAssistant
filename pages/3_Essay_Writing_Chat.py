@@ -36,7 +36,7 @@ if "messages" not in st.session_state:
         {"role": "system", "content": system_prompt},
         {"role": "assistant", "content": "👋 Hello! I’m your essay coach. How can I help?"}
     ]
-
+'''
 # Load previous chats if logged in
 chats_collection = get_collection("chats")
 user_id = None
@@ -52,7 +52,7 @@ for m in st.session_state.messages[1:]:
     with st.chat_message("user" if m["role"] == "user" else "assistant",
                          avatar="🧑‍🎓" if m["role"] == "user" else "📝"):
         st.markdown(m["content"])
-
+'''
 # Set up the Gemini model using the system prompt
 model = genai.GenerativeModel(
     "gemini-1.5-flash",  # Use the correct model name here
