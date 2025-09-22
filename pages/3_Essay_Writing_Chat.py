@@ -12,7 +12,7 @@ st.write("Your personal essay coach! Ask me anything about SPM essay writing ✍
 
 # Local imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from Connection import get_genai_connection, get_collection
+from Connection import get_genai_connection
 from Authentication import verify_jwt_token  # Optional: Only if you use JWT login
 
 # Initialize Gemini API
@@ -79,11 +79,11 @@ if prompt := st.chat_input("Type your essay question here..."):
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
     # Save chat
-    if user_id:
-        chats_collection.update_one(
-            {"user_id": user_id},
-            {"$set": {"messages": st.session_state.messages, "updated_at": datetime.utcnow()}},
-            upsert=True
+    #if user_id:
+     #   chats_collection.update_one(
+      #      {"user_id": user_id},
+       #     {"$set": {"messages": st.session_state.messages, "updated_at": datetime.utcnow()}},
+        #    upsert=True
         )
 
 # --- Quick Help Buttons ---
