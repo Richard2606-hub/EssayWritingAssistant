@@ -84,7 +84,7 @@ if prompt := st.chat_input("Type your essay question here..."):
       #      {"user_id": user_id},
        #     {"$set": {"messages": st.session_state.messages, "updated_at": datetime.utcnow()}},
         #    upsert=True
-        )
+        #)
 
 # --- Quick Help Buttons ---
 st.markdown("---")
