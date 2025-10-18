@@ -1,8 +1,2 @@
 # Essay writing assistant
-This is a simple tool that helps you write essays.
-
-## Team
-- Richard Ting Li Zeng (CS)
-- Tan Wei Jian (CS)
-- Loo Li Heng (CS)
-- Chin Wai Yee (CS)
+This is an assistant which is able to help on scoring well in spm
