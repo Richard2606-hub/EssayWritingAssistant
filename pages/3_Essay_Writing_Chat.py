@@ -54,7 +54,7 @@ for m in st.session_state.messages[1:]:
 '''
 # Set up the Gemini model using the system prompt
 model = genai.GenerativeModel(
-    "gemini-1.5-flash",  # Use the correct model name here
+    "gemini-2.5-flash",
     system_instruction=st.session_state.messages[0]["content"]
 )
 
